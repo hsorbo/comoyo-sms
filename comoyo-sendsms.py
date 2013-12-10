@@ -29,6 +29,7 @@ class ComoyoTransport():
 	def __init__(self, sslSocket):
 		self._sslSocket = sslSocket
 		self._subscribers = []
+		self._disconnect_handlers = []
 		thread.start_new_thread(self._eventLoop, () )
 
 	def _eventLoop(self):
@@ -36,9 +37,8 @@ class ComoyoTransport():
 		while True:
 			data = self._sslSocket.read(4096)
 			if not data: 
-				print("disconnect")
-				for subscriber in self._subscribers:
-						subscriber(None)
+				for disconnect in self._disconnect_handlers:
+					disconnect()
 				break
 			read += data;
 			if read[-1] == "\x00":
@@ -54,6 +54,12 @@ class ComoyoTransport():
 	
 	def unregister_handler(self, f):
 		self._subscribers.remove(f)
+
+	def register_disconnect_handler(self, f):
+		self._disconnect_handlers.append(f)
+
+	def unregister_disconnect_handler(self, f):
+		self._disconnect_handlers.append(f)
 
 	def write(self, obj):
 		#print "SEND:"
@@ -192,7 +198,7 @@ def save_settings(settings):
 	f.close()
 
 
-def monitor(sms):
+def monitor(transport, sms):
 	sms.enable_smsplus()
 	sms.enable_subscription()
 	def conv_update(conversations):
@@ -202,7 +208,11 @@ def monitor(sms):
 				print message["messageSender"] 
 				print message["body"]["richTextElements"][0]["richTextString"]["text"]
 	sms.register_delta_conversations_handler(conv_update)
-
+	import os
+	def die(): 
+		print "Disconnected"
+		os._exit(0)
+	transport.register_disconnect_handler(die)
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description='Sends SMS via Telenor/Comoyo API')
@@ -241,7 +251,7 @@ if __name__ == "__main__":
 	elif args.monitor:
 		settings = load_settings()
 		login.authenticate(settings)
-		monitor(sms)
+		monitor(transport, sms)
 		import time
 		time.sleep(100000)
 
