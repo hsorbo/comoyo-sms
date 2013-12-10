@@ -56,8 +56,8 @@ class ComoyoTransport():
 		self._subscribers.remove(f)
 
 	def write(self, obj):
-		print "SEND:"
-		print json.dumps(obj, indent=1)
+		#print "SEND:"
+		#print json.dumps(obj, indent=1)
 		self._sslSocket.write(json.dumps(obj) + "\x00")
 
 class ComoyoCommander():
@@ -118,6 +118,7 @@ class ComoyoSMS():
 		transport.register_handler(self._on_event)
 		self._conversation_latest = 0
 		self._conversation_handlers = []
+		self._delta_conversation_handlers = []
 		self._conversations = []
 
 
@@ -167,12 +168,16 @@ class ComoyoSMS():
 	def _update_conversations(self, minimum, maximum):
 		new_conversations = self.get_conversations(minimum, maximum)
 		self._conversations.extend(new_conversations)
+		for conversation_handler in self._delta_conversation_handlers:
+			conversation_handler(new_conversations)
 		for conversation_handler in self._conversation_handlers:
 			conversation_handler(self._conversations)
 
-
 	def register_conversations_handler(self, f):
 		self._conversation_handlers.append(f)
+
+	def register_delta_conversations_handler(self, f):
+		self._delta_conversation_handlers.append(f)
 
 
 def load_settings():
@@ -187,6 +192,18 @@ def save_settings(settings):
 	f.close()
 
 
+def monitor(sms):
+	sms.enable_smsplus()
+	sms.enable_subscription()
+	def conv_update(conversations):
+		for conversation in conversations:
+			message = conversation["latestMessage"]
+			if not message["viewed"] and message.has_key("messageSender"):
+				print message["messageSender"] 
+				print message["body"]["richTextElements"][0]["richTextString"]["text"]
+	sms.register_delta_conversations_handler(conv_update)
+
+
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description='Sends SMS via Telenor/Comoyo API')
 	subparsers = parser.add_subparsers(title='subcommands', description='valid subcommands', help='additional help')
@@ -195,6 +212,9 @@ if __name__ == "__main__":
 
 	login_parser = subparsers.add_parser('login', help='login username password')
 	login_parser.add_argument('login',  nargs=2)
+
+	monitor_parser = subparsers.add_parser('monitor', help='monitor')
+	monitor_parser.add_argument('monitor', action="store_true")
 
 	args = parser.parse_args()
 
@@ -205,18 +225,24 @@ if __name__ == "__main__":
 	commander = ComoyoCommander(transport)
 	login = ComoyoLogin(commander)
 	sms =  ComoyoSMS(transport, commander)
-
+	login.activate()
+		
 	arg_dict = vars(args)
 	if arg_dict.has_key("send"):
 		settings = load_settings()
-		login.activate()
 		login.authenticate(settings)
 		sms.send_sms(arg_dict["send"][0], arg_dict["send"][1])
 
 	elif arg_dict.has_key("login"):
 		(username, password) = (arg_dict["login"][0], arg_dict["login"][1])
-		login.activate()
 		settings = login.login(username, password, comoyo.register())
 		save_settings(settings)
+
+	elif args.monitor:
+		settings = load_settings()
+		login.authenticate(settings)
+		monitor(sms)
+		import time
+		time.sleep(100000)
 
 	s.close()
