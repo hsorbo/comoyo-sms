@@ -43,9 +43,22 @@ class ComoyoWire():
         self._sslSocket.write("\x00")
 
 class ComoyoTransport(ComoyoWire):
-    def __init__(self, sslSocket): 
+    def __init__(self, sslSocket, send_heartbeat = True): 
         ComoyoWire.__init__(self, sslSocket)
         self._subscribers = []
+        self._send_heartbeat = send_heartbeat
+
+    def start(self):
+        ComoyoWire.start(self)
+        if self._send_heartbeat:
+            t = threading.Thread(target=self._heartbeat)
+            t.daemon = True
+            t.start()
+
+    def _heartbeat(self):
+        while True:
+            time.sleep(50)
+            self.write_entity(None)
 
     def handle_recieved_entity(self, data):
         for subscriber in self._subscribers: subscriber(json.loads(data))
@@ -182,12 +195,3 @@ def connect_comoyo():
     s.connect(('edgee-json.comoyo.com', 443))
     return (s,  socket.ssl(s))
 
-def heartbeat(connection):
-    def hb():
-        while True:
-            time.sleep(50)
-            connection.write_entity(None)
-    t = threading.Thread(target=hb)
-    t.daemon = True
-    t.start()
-    return t

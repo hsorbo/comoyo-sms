@@ -78,7 +78,5 @@ if __name__ == "__main__":
         settings = load_settings()
         login.authenticate(settings)
         monitor(transport, sms)
-        hbThread = heartbeat(transport)
         transport.rxThread.join(2**31)
-        hbThread.join(2**31)
     s.close()
