@@ -26,11 +26,9 @@ CLIENT_INFO =  {
         "protocolVersion" : "1.13.26"
         }
 
-class ComoyoTransport():
+class ComoyoWire():
     def __init__(self, sslSocket):
         self._sslSocket = sslSocket
-        self._subscribers = []
-        self._disconnect_handlers = []
         self.rxThread = threading.Thread(target=self._eventLoop,)
         self.rxThread.daemon = True
         self.rxThread.start()
@@ -48,26 +46,25 @@ class ComoyoTransport():
                 for chunk in read.split("\x00"):
                     #use filter
                     if chunk == "": continue
-                    for subscriber in self._subscribers:
-                        subscriber(json.loads(chunk))
+                    self.handle_recieved_entity(chunk)
                 read = ""
 
-    def register_handler(self, f):
-        self._subscribers.append(f)
-    
-    def unregister_handler(self, f):
-        self._subscribers.remove(f)
+    def handle_recieved_entity(self, data): pass
 
-    def write(self, obj):
-        self._sslSocket.write(json.dumps(obj))
-        self.commit()
-    
-    def commit(self): self._sslSocket.write("\x00")
+    def write_entity(self, data = None):
+        if data: self._sslSocket.write(data)
+        self._sslSocket.write("\x00")
 
+class ComoyoTransport(ComoyoWire):
+    def __init__(self, sslSocket): 
+        ComoyoWire.__init__(self, sslSocket)
+        self._subscribers = []
 
-class ComoyoCommander():
-    def __init__(self, transport):
-        self._transport = transport
+    def handle_recieved_entity(self, data):
+        for subscriber in self._subscribers: subscriber(json.loads(data))
+
+    def register_handler(self, f): self._subscribers.append(f)
+    def unregister_handler(self, f): self._subscribers.remove(f)
 
         #TODO: take a lambda on "response-format" for special purpose mappers
     def send_command(self, command, response_format = None): 
@@ -82,36 +79,36 @@ class ComoyoCommander():
                 r["response"] = response[response_format]
                 evt.set()
             
-        self._transport.register_handler(f)
-        self._transport.write(command)
+        self.register_handler(f)
+        self.write_entity(json.dumps(command))
         evt.wait(10)
-        self._transport.unregister_handler(f)
+        self.unregister_handler(f)
         response = r["response"]
         return response
 
 class ComoyoLogin():
-    def __init__(self, commander):
-        self._commander = commander
+    def __init__(self, transport):
+        self._transport = transport
 
     def activate(self): 
         activate_command = {"com.telenor.sw.adaptee.th.ClientActiveCommand" : { "clientInformation" : CLIENT_INFO }}
-        response = self._commander.send_command(activate_command, "com.telenor.sw.footee.common.th.ClientActiveResponse")
+        response = self._transport.send_command(activate_command, "com.telenor.sw.footee.common.th.ClientActiveResponse")
 
     def authenticate(self, auth_info):
         #destructive, fix
         auth_info["commandVersion"] = 0
         auth_command = {"com.telenor.sw.adaptee.th.AuthenticateSessionCommand" : { "authenticateSessionInformation" : auth_info }}
-        response = self._commander.send_command(auth_command, "com.telenor.sw.footee.common.th.AuthenticateSessionResponse")
+        response = self._transport.send_command(auth_command, "com.telenor.sw.footee.common.th.AuthenticateSessionResponse")
 
     def register(self):
         register_command = {"com.telenor.sw.adaptee.th.ClientRegistrationCommand" : { "clientInformation" : CLIENT_INFO}}
-        response = self._commander.send_command(register_command)
+        response = self._transport.send_command(register_command)
         return response["com.telenor.sw.footee.common.th.ClientRegistrationResponse"]["clientId"]
 
     def login(self, username, password, clientId):
         login_info = {"userName": username, "password": password,"clientId": clientId}
         login_command = {"com.telenor.sw.adaptee.th.AccountLoginCommand" : {"accountLoginInformation": login_info }}
-        response = self._commander.send_command(login_command)
+        response = self._transport.send_command(login_command)
         registration_response = response["com.telenor.sw.footee.common.th.AccountLoginResponse"]
         if not registration_response["loggedIn"]: raise Exception("Login error, perhaps +47 ?")
         registration_response["clientId"] = clientId
@@ -119,8 +116,8 @@ class ComoyoLogin():
 
 
 class ComoyoSMS():
-    def __init__(self, transport, commander):
-        self._commander = commander
+    def __init__(self, transport):
+        self._transport= transport
         transport.register_handler(self._on_event)
         self._conversation_latest = 0
         self._conversation_handlers = []
@@ -136,7 +133,7 @@ class ComoyoSMS():
             "token": str(uuid.uuid1())
         }
         send_sms_command = {"com.telenor.sw.adaptee.th.SendSmsCommand" : { "smsMessage" : message }}
-        response = self._commander.send_command(send_sms_command)
+        response = self._transport.send_command(send_sms_command)
 
 
     def get_conversations(self, start, end):
@@ -145,13 +142,13 @@ class ComoyoSMS():
             "com.telenor.sw.adaptee.th.ConversationUpdateRequestCommand":
             {"generationRange": generationRange}
         }
-        return self._commander.send_command(command, "com.telenor.sw.adaptee.th.ConversationUpdateResponse")["conversations"]
+        return self._transport.send_command(command, "com.telenor.sw.adaptee.th.ConversationUpdateResponse")["conversations"]
     
     def enable_smsplus(self):
         """Dunno
         """
         command = {"com.telenor.sw.adaptee.th.ServiceRequestCommand":{"serviceId":"smsplus"}}
-        self._commander.send_command(command, "com.telenor.sw.footee.common.th.ServiceResponse")
+        self._transport.send_command(command, "com.telenor.sw.footee.common.th.ServiceResponse")
 
     def enable_subscription(self, subscribeToContactUpdates = True, subscribeToConversationUpdates = True):
         command = {
@@ -162,7 +159,7 @@ class ComoyoSMS():
                 }
             }
         }
-        self._commander.send_command(command)   
+        self._transport.send_command(command)   
     
 
     def _on_event(self, event):
@@ -213,7 +210,7 @@ def heartbeat(connection):
     def hb():
         while True:
             time.sleep(50)
-            connection.commit()
+            connection.write_entity(None)
     t = threading.Thread(target=hb)
     t.daemon = True
     t.start()
@@ -237,9 +234,8 @@ if __name__ == "__main__":
     s.connect(('edgee-json.comoyo.com', 443))
     sslSocket = socket.ssl(s)
     transport = ComoyoTransport(sslSocket)
-    commander = ComoyoCommander(transport)
-    login = ComoyoLogin(commander)
-    sms =  ComoyoSMS(transport, commander)
+    login = ComoyoLogin(transport)
+    sms =  ComoyoSMS(transport)
     login.activate()
         
     arg_dict = vars(args)
