@@ -11,6 +11,8 @@ class ComoyoWire():
 
     def __init__(self, sslSocket):
         self._sslSocket = sslSocket
+
+    def start(self):
         self.rxThread = threading.Thread(target=self._eventLoop,)
         self.rxThread.daemon = True
         self.rxThread.start()

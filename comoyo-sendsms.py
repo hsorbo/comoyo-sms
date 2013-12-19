@@ -58,6 +58,7 @@ if __name__ == "__main__":
 
     (s, sslSocket) = connect_comoyo()
     transport = ComoyoTransport(sslSocket)
+    transport.start()
     login = ComoyoLogin(transport)
     sms =  ComoyoSMS(transport)
     login.activate()
