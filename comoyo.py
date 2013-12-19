@@ -20,7 +20,7 @@ class ComoyoWire():
         while True:
             data = self._sslSocket.read(4096)
             if not data: 
-                handle_disconnect()
+                self.handle_disconnect()
                 break
             read += data;
             if read[-1] == "\x00":
