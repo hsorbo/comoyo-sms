@@ -20,8 +20,7 @@ class ComoyoWire():
         while True:
             data = self._sslSocket.read(4096)
             if not data: 
-                for disconnect in self._disconnect_handlers:
-                    disconnect()
+                handle_disconnect()
                 break
             read += data;
             if read[-1] == "\x00":
@@ -33,6 +32,8 @@ class ComoyoWire():
                 read = ""
 
     def handle_recieved_entity(self, data): pass
+
+    def handle_disconnect(self): pass
 
     def write_entity(self, data = None):
         self.log.debug("Sending: %s" % data)
