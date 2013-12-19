@@ -13,6 +13,7 @@ import os
 import argparse
 import thread
 import threading
+import time
 
 SESSION_FILE = os.path.expanduser("~/.sendsms.json")
 
@@ -30,7 +31,9 @@ class ComoyoTransport():
 		self._sslSocket = sslSocket
 		self._subscribers = []
 		self._disconnect_handlers = []
-		thread.start_new_thread(self._eventLoop, () )
+		self.rxThread = threading.Thread(target=self._eventLoop,)
+		self.rxThread.daemon = True
+		self.rxThread.start()
 
 	def _eventLoop(self):
 		read = ""
@@ -64,13 +67,18 @@ class ComoyoTransport():
 	def write(self, obj):
 		#print "SEND:"
 		#print json.dumps(obj, indent=1)
-		self._sslSocket.write(json.dumps(obj) + "\x00")
+		self._sslSocket.write(json.dumps(obj))
+		self.commit()
+	
+	def commit(self): self._sslSocket.write("\x00")
+
 
 class ComoyoCommander():
 	def __init__(self, transport):
 		self._transport = transport
 
-	def send_command(self, command, response_format = None):
+		#TODO: take a lambda on "response-format" for special purpose mappers
+	def send_command(self, command, response_format = None): 
 		evt = threading.Event()
 		chunks = []
 		r = {}
@@ -214,6 +222,16 @@ def monitor(transport, sms):
 		os._exit(0)
 	transport.register_disconnect_handler(die)
 
+def heartbeat(connection):
+	def hb():
+		while True:
+			time.sleep(50)
+			connection.commit()
+	t = threading.Thread(target=hb)
+	t.daemon = True
+	t.start()
+	return t
+
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description='Sends SMS via Telenor/Comoyo API')
 	subparsers = parser.add_subparsers(title='subcommands', description='valid subcommands', help='additional help')
@@ -252,7 +270,9 @@ if __name__ == "__main__":
 		settings = load_settings()
 		login.authenticate(settings)
 		monitor(transport, sms)
-		import time
-		time.sleep(100000)
+		hbThread = heartbeat(transport)
+		transport.rxThread.join(2**31)
+		hbThread.join(2**31)
+
 
 	s.close()
