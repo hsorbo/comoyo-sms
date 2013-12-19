@@ -73,10 +73,9 @@ class ComoyoTransport(ComoyoWire):
         def f(response):
             if response_format == None or response == None:
                 r["response"] = None
-                evt.set()
             elif response.has_key(response_format):
                 r["response"] = response[response_format]
-                evt.set()
+            evt.set()
             
         self.register_handler(f)
         self.write_entity(json.dumps(command))
