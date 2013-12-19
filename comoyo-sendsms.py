@@ -69,7 +69,6 @@ class ComoyoTransport(ComoyoWire):
         #TODO: take a lambda on "response-format" for special purpose mappers
     def send_command(self, command, response_format = None): 
         evt = threading.Event()
-        chunks = []
         r = {}
         def f(response):
             if response_format == None or response == None:
