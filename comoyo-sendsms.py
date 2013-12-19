@@ -58,15 +58,7 @@ class ComoyoTransport():
     def unregister_handler(self, f):
         self._subscribers.remove(f)
 
-    def register_disconnect_handler(self, f):
-        self._disconnect_handlers.append(f)
-
-    def unregister_disconnect_handler(self, f):
-        self._disconnect_handlers.append(f)
-
     def write(self, obj):
-        #print "SEND:"
-        #print json.dumps(obj, indent=1)
         self._sslSocket.write(json.dumps(obj))
         self.commit()
     
@@ -216,11 +208,6 @@ def monitor(transport, sms):
                 print message["messageSender"] 
                 print message["body"]["richTextElements"][0]["richTextString"]["text"]
     sms.register_delta_conversations_handler(conv_update)
-    import os
-    def die(): 
-        print "Disconnected"
-        os._exit(0)
-    transport.register_disconnect_handler(die)
 
 def heartbeat(connection):
     def hb():
