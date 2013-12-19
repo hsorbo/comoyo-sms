@@ -14,6 +14,7 @@ import argparse
 import thread
 import threading
 import time
+import logging
 
 SESSION_FILE = os.path.expanduser("~/.sendsms.json")
 
@@ -27,6 +28,8 @@ CLIENT_INFO =  {
         }
 
 class ComoyoWire():
+    log = logging.getLogger("ComoyoWire")
+
     def __init__(self, sslSocket):
         self._sslSocket = sslSocket
         self.rxThread = threading.Thread(target=self._eventLoop,)
@@ -46,12 +49,14 @@ class ComoyoWire():
                 for chunk in read.split("\x00"):
                     #use filter
                     if chunk == "": continue
+                    self.log.debug("Receieved: %s" % chunk)
                     self.handle_recieved_entity(chunk)
                 read = ""
 
     def handle_recieved_entity(self, data): pass
 
     def write_entity(self, data = None):
+        self.log.debug("Sending: %s" % data)
         if data: self._sslSocket.write(data)
         self._sslSocket.write("\x00")
 
@@ -216,6 +221,7 @@ def heartbeat(connection):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Sends SMS via Telenor/Comoyo API')
+    parser.add_argument('--debug', action = 'store_true')
     subparsers = parser.add_subparsers(title='subcommands', description='valid subcommands', help='additional help')
     send_parser = subparsers.add_parser('send', help='send number "message"')
     send_parser.add_argument('send',  nargs=2)
@@ -227,6 +233,7 @@ if __name__ == "__main__":
     monitor_parser.add_argument('monitor', action="store_true")
 
     args = parser.parse_args()
+    if(args.debug): logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
 
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect(('edgee-json.comoyo.com', 443))
