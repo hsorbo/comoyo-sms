@@ -85,30 +85,34 @@ class ComoyoTransport(ComoyoWire):
         return response
 
 class ComoyoLogin():
-    CLIENT_INFO =  { 
+    CLIENT_INFO =  { "clientInformation" : { 
         "imsi" : "Sms Windows Client",
         "imei" : "000000000000000000",
         "clientLocaleTag" : "en-US",
         "clientType" : "Sms Windows Client",
         "clientVersion" : "2012.1.320.0",
         "protocolVersion" : "1.13.26"
-        }
+        }}
 
     def __init__(self, transport):
         self._transport = transport
 
     def activate(self): 
-        activate_command = {"com.telenor.sw.adaptee.th.ClientActiveCommand" : { "clientInformation" : self.CLIENT_INFO }}
-        response = self._transport.send_command(activate_command, "com.telenor.sw.footee.common.th.ClientActiveResponse")
+        activate_command = {"com.telenor.sw.adaptee.th.ClientActiveCommand" : self.CLIENT_INFO }
+        response_key = "com.telenor.sw.footee.common.th.ClientActiveResponse"
+        response = self._transport.send_command(activate_command, response_key)
 
     def authenticate(self, auth_info):
         #destructive, fix
         auth_info["commandVersion"] = 0
-        auth_command = {"com.telenor.sw.adaptee.th.AuthenticateSessionCommand" : { "authenticateSessionInformation" : auth_info }}
-        response = self._transport.send_command(auth_command, "com.telenor.sw.footee.common.th.AuthenticateSessionResponse")
+        auth_command = {
+            "com.telenor.sw.adaptee.th.AuthenticateSessionCommand" : { 
+                "authenticateSessionInformation" : auth_info }}
+        response_key = "com.telenor.sw.footee.common.th.AuthenticateSessionResponse"
+        response = self._transport.send_command(auth_command, response_key)
 
     def register(self):
-        register_command = {"com.telenor.sw.adaptee.th.ClientRegistrationCommand" : { "clientInformation" : self.CLIENT_INFO}}
+        register_command = {"com.telenor.sw.adaptee.th.ClientRegistrationCommand" : self.CLIENT_INFO}
         response = self._transport.send_command(register_command)
         return response["com.telenor.sw.footee.common.th.ClientRegistrationResponse"]["clientId"]
 
@@ -149,7 +153,8 @@ class ComoyoSMS():
             "com.telenor.sw.adaptee.th.ConversationUpdateRequestCommand":
             {"generationRange": generationRange}
         }
-        return self._transport.send_command(command, "com.telenor.sw.adaptee.th.ConversationUpdateResponse")["conversations"]
+        response = self._transport.send_command(command, "com.telenor.sw.adaptee.th.ConversationUpdateResponse")
+        return response["conversations"]
     
     def enable_smsplus(self):
         """Dunno
