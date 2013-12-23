@@ -8,20 +8,29 @@ import logging
 
 class ComoyoWire():
     log = logging.getLogger("ComoyoWire")
-
-    def __init__(self, sslSocket):
-        self._sslSocket = sslSocket
-
-    def start(self):
+    connected = False
+    
+    def connect(self):
+        #TODO: Check if already connected ++
+        self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._socket.connect(('edgee-json.comoyo.com', 443))
+        self._sslSocket = socket.ssl(self._socket)
+        self.connected = True
         self.rxThread = threading.Thread(target=self._eventLoop,)
         self.rxThread.daemon = True
         self.rxThread.start()
+        self.handle_connect()
+
+    def disconnect(self):
+        self.connected = False
+        self._socket.close()
+        self.handle_disconnect()
 
     def _eventLoop(self):
         read = ""
         while True:
             data = self._sslSocket.read(4096)
-            if not data: 
+            if not data and self.connected: 
                 self.handle_disconnect()
                 break
             read += data;
@@ -35,6 +44,7 @@ class ComoyoWire():
 
     def handle_recieved_entity(self, data): pass
 
+    def handle_connect(self): pass
     def handle_disconnect(self): pass
 
     def write_entity(self, data = None):
@@ -43,22 +53,27 @@ class ComoyoWire():
         self._sslSocket.write("\x00")
 
 class ComoyoTransport(ComoyoWire):
-    def __init__(self, sslSocket, send_heartbeat = True): 
-        ComoyoWire.__init__(self, sslSocket)
+    def __init__(self, send_heartbeat = True): 
         self._subscribers = []
         self._send_heartbeat = send_heartbeat
-
-    def start(self):
-        ComoyoWire.start(self)
-        if self._send_heartbeat:
+    
+    def _init_heartbeat(self):
+        if self._send_heartbeat and self.connected:
             t = threading.Thread(target=self._heartbeat)
             t.daemon = True
             t.start()
 
     def _heartbeat(self):
+        #...   threading.Timer(10, foo).start() http://stackoverflow.com/questions/8600161/executing-periodic-actions-in-python
+        #print "starting heartbeat"
+        #http://stackoverflow.com/questions/2906510/correct-way-to-do-timer-function-in-python
         while True:
             time.sleep(50)
+            if not self.connected:
+                break
             self.write_entity(None)
+
+    def handle_connect(self): self._init_heartbeat()
 
     def handle_recieved_entity(self, data):
         for subscriber in self._subscribers: subscriber(json.loads(data))
@@ -194,10 +209,3 @@ class ComoyoSMS():
 
     def register_delta_conversations_handler(self, f):
         self._delta_conversation_handlers.append(f)
-
-
-def connect_comoyo():
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect(('edgee-json.comoyo.com', 443))
-    return (s,  socket.ssl(s))
-

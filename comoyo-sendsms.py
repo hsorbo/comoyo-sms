@@ -56,11 +56,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if(args.debug): logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
 
-    (s, sslSocket) = connect_comoyo()
-    transport = ComoyoTransport(sslSocket)
-    transport.start()
+    transport = ComoyoTransport()
     login = ComoyoLogin(transport)
     sms =  ComoyoSMS(transport)
+    transport.connect()
     login.activate()
         
     arg_dict = vars(args)
@@ -79,4 +78,4 @@ if __name__ == "__main__":
         login.authenticate(settings)
         monitor(transport, sms)
         transport.rxThread.join(2**31)
-    s.close()
+    transport.disconnect()
