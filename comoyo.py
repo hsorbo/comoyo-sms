@@ -118,9 +118,8 @@ class ComoyoLogin():
         response_key = "com.telenor.sw.footee.common.th.ClientActiveResponse"
         response = self._transport.send_command(activate_command, response_key)
 
-    def authenticate(self, auth_info):
-        #destructive, fix
-        auth_info["commandVersion"] = 0
+    def authenticate(self, sessionKey, userId, clientId):
+        auth_info = { "sessionKey" : sessionKey, "userId" : userId, "clientId" : clientId, "commandVersion" : 0 }
         auth_command = {
             "com.telenor.sw.adaptee.th.AuthenticateSessionCommand" : { 
                 "authenticateSessionInformation" : auth_info }}

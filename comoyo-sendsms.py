@@ -65,7 +65,7 @@ if __name__ == "__main__":
     arg_dict = vars(args)
     if arg_dict.has_key("send"):
         settings = load_settings()
-        login.authenticate(settings)
+        login.authenticate(settings["sessionKey"], settings["userId"], settings["clientId"])
         sms.send_sms(arg_dict["send"][0], arg_dict["send"][1])
 
     elif arg_dict.has_key("login"):
@@ -75,7 +75,7 @@ if __name__ == "__main__":
 
     elif args.monitor:
         settings = load_settings()
-        login.authenticate(settings)
+        login.authenticate(settings["sessionKey"], settings["userId"], settings["clientId"])
         monitor(transport, sms)
         transport.rxThread.join(2**31)
     transport.disconnect()
