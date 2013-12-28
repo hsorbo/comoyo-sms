@@ -128,17 +128,17 @@ class ComoyoLogin():
 
     def register(self):
         register_command = {"com.telenor.sw.adaptee.th.ClientRegistrationCommand" : self.CLIENT_INFO}
-        response = self._transport.send_command(register_command)
-        return response["com.telenor.sw.footee.common.th.ClientRegistrationResponse"]["clientId"]
+        response_key = "com.telenor.sw.footee.common.th.ClientRegistrationResponse"
+        response = self._transport.send_command(register_command, response_key)
+        return response["clientId"]
 
     def login(self, username, password, clientId):
         login_info = {"userName": username, "password": password,"clientId": clientId}
         login_command = {"com.telenor.sw.adaptee.th.AccountLoginCommand" : {"accountLoginInformation": login_info }}
-        response = self._transport.send_command(login_command)
-        registration_response = response["com.telenor.sw.footee.common.th.AccountLoginResponse"]
-        if not registration_response["loggedIn"]: raise Exception("Login error, perhaps +47 ?")
-        registration_response["clientId"] = clientId
-        return registration_response
+        response_key = "com.telenor.sw.footee.common.th.AccountLoginResponse"
+        response = self._transport.send_command(login_command, response_key)
+        if not response["loggedIn"]: raise Exception("Login error, perhaps +47 ?")
+        return response
 
 
 class ComoyoSMS():
