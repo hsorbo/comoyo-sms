@@ -70,7 +70,7 @@ if __name__ == "__main__":
 
     elif arg_dict.has_key("login"):
         (username, password) = (arg_dict["login"][0], arg_dict["login"][1])
-        settings = login.login(username, password, comoyo.register())
+        settings = login.login(username, password, login.register())
         save_settings(settings)
 
     elif args.monitor:

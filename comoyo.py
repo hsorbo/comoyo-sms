@@ -48,7 +48,6 @@ class ComoyoWire():
                 read = ""
 
     def handle_recieved_entity(self, data): pass
-
     def handle_connect(self): pass
     def handle_disconnect(self, expected): pass
 
@@ -59,8 +58,10 @@ class ComoyoWire():
 
 class ComoyoTransport(ComoyoWire):
     def __init__(self, send_heartbeat = True): 
-        self._subscribers = []
         self._send_heartbeat = send_heartbeat
+        self.entity_subscribers = []
+        self.connect_subscribers = []
+        self.disconnect_subscribers = []
     
     def _init_heartbeat(self):
         if self._send_heartbeat and self.connected:
@@ -78,15 +79,17 @@ class ComoyoTransport(ComoyoWire):
                 break
             self.write_entity(None)
 
-    def handle_connect(self): self._init_heartbeat()
+    def handle_connect(self): 
+        self._init_heartbeat()
+        for s in self.connect_subscribers: s()
 
-    def handle_recieved_entity(self, data):
-        for subscriber in self._subscribers: subscriber(json.loads(data))
+    def handle_disconnect(self, expected): 
+        for s in self.disconnect_subscribers: s()
 
-    def register_handler(self, f): self._subscribers.append(f)
-    def unregister_handler(self, f): self._subscribers.remove(f)
+    def handle_recieved_entity(self, data): 
+        for s in self.entity_subscribers: s(json.loads(data))
 
-        #TODO: take a lambda on "response-format" for special purpose mappers
+    #TODO: take a lambda on "response-format" for special purpose mappers
     def send_command(self, command, response_format = None): 
         evt = threading.Event()
         r = {}
@@ -98,10 +101,10 @@ class ComoyoTransport(ComoyoWire):
                 r["response"] = response[response_format]
                 evt.set()
             
-        self.register_handler(f)
+        self.entity_subscribers.append(f)
         self.write_entity(json.dumps(command))
         evt.wait(10)
-        self.unregister_handler(f)
+        self.entity_subscribers.remove(f)
         response = r["response"]
         return response
 
@@ -149,7 +152,7 @@ class ComoyoLogin():
 class ComoyoSMS():
     def __init__(self, transport):
         self._transport= transport
-        transport.register_handler(self._on_event)
+        transport.entity_subscribers.append(self._on_event)
         self._conversation_latest = 0
         self._conversation_handlers = []
         self._delta_conversation_handlers = []
