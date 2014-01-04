@@ -12,6 +12,7 @@ class ComoyoWire():
     
     def connect(self):
         #TODO: Check if already connected ++
+        self.log.debug("Connecting")
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._socket.connect(('edgee-json.comoyo.com', 443))
         self._sslSocket = socket.ssl(self._socket)
@@ -22,17 +23,21 @@ class ComoyoWire():
         self.handle_connect()
 
     def disconnect(self):
+        self.log.debug("Disconnecting")
+        if not self.connected: return
         self.connected = False
         self._socket.close()
-        self.handle_disconnect()
+        self.handle_disconnect(True)
 
     def _eventLoop(self):
         read = ""
         while True:
             data = self._sslSocket.read(4096)
-            if not data and self.connected: 
-                self.handle_disconnect()
-                break
+            if not data:
+                if self.connected: self.handle_disconnect(False)
+                self.connected = False
+                self._socket.close()
+                return
             read += data;
             if read[-1] == "\x00":
                 for chunk in read.split("\x00"):
@@ -45,7 +50,7 @@ class ComoyoWire():
     def handle_recieved_entity(self, data): pass
 
     def handle_connect(self): pass
-    def handle_disconnect(self): pass
+    def handle_disconnect(self, expected): pass
 
     def write_entity(self, data = None):
         self.log.debug("Sending: %s" % data)
