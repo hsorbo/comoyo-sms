@@ -84,7 +84,7 @@ class ComoyoTransport(ComoyoWire):
         for s in self.connect_subscribers: s()
 
     def handle_disconnect(self, expected): 
-        for s in self.disconnect_subscribers: s()
+        for s in self.disconnect_subscribers: s(expected)
 
     def handle_recieved_entity(self, data): 
         for s in self.entity_subscribers: s(json.loads(data))
