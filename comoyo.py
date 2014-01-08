@@ -7,6 +7,7 @@ import time
 import logging
 
 class ComoyoWire():
+    DELIM = "\x00"
     log = logging.getLogger("ComoyoWire")
     connected = False
     
@@ -20,41 +21,51 @@ class ComoyoWire():
         self.rxThread = threading.Thread(target=self._eventLoop,)
         self.rxThread.daemon = True
         self.rxThread.start()
-        self.handle_connect()
-
+      
     def disconnect(self):
         self.log.debug("Disconnecting")
         if not self.connected: return
         self.connected = False
+        self._socket.shutdown(socket.SHUT_RDWR)
         self._socket.close()
-        self.handle_disconnect(True)
 
     def _eventLoop(self):
+        self.handle_connect()
         read = ""
+        failed = False
         while True:
-            data = self._sslSocket.read(4096)
-            if not data:
-                if self.connected: self.handle_disconnect(False)
-                self.connected = False
-                self._socket.close()
+            try: data = self._sslSocket.read(4096)
+            except: failed = True
+            if failed or not data:
+                if self.connected: 
+                    self.log.debug("Abort")
+                    self.connected = False
+                    self._socket.close()
+                    self.handle_abort()
                 return
             read += data;
-            if read[-1] == "\x00":
-                for chunk in read.split("\x00"):
+            if read[-1] == ComoyoWire.DELIM:
+                for chunk in read.split(ComoyoWire.DELIM):
                     #use filter
                     if chunk == "": continue
                     self.log.debug("Receieved: %s" % chunk)
-                    self.handle_recieved_entity(chunk)
+                    self.handle_entity(chunk)
                 read = ""
 
-    def handle_recieved_entity(self, data): pass
+    def handle_entity(self, data): pass
     def handle_connect(self): pass
-    def handle_disconnect(self, expected): pass
+    def handle_abort(self): pass
 
     def write_entity(self, data = None):
         self.log.debug("Sending: %s" % data)
         if data: self._sslSocket.write(data)
-        self._sslSocket.write("\x00")
+        try:
+            self._sslSocket.write(ComoyoWire.DELIM)
+        except:
+            self.log.debug("Error sending: %s" % data)
+            self._socket.shutdown(socket.SHUT_RDWR)
+            self._socket.close()
+            raise
 
 class ComoyoTransport(ComoyoWire):
     def __init__(self, send_heartbeat = True): 
@@ -83,13 +94,13 @@ class ComoyoTransport(ComoyoWire):
         self._init_heartbeat()
         for s in self.connect_subscribers: s()
 
-    def handle_disconnect(self, expected): 
-        for s in self.disconnect_subscribers: s(expected)
+    def handle_abort(self): 
+        for s in self.disconnect_subscribers: s()
 
-    def handle_recieved_entity(self, data): 
+    def handle_entity(self, data): 
         for s in self.entity_subscribers: s(json.loads(data))
 
-    #TODO: take a lambda on "response-format" for special purpose mappers
+    #TODO: take a lambda on "response-format" for special purpose mappers, aka selector
     def send_command(self, command, response_format = None): 
         evt = threading.Event()
         r = {}
@@ -108,6 +119,8 @@ class ComoyoTransport(ComoyoWire):
         response = r["response"]
         return response
 
+    #TODO: def queue_command(self, command, response_format, response_callback, timeout = 10)
+
 class ComoyoLogin():
     CLIENT_INFO =  { "clientInformation" : { 
         "imsi" : "Sms Windows Client",
@@ -125,6 +138,7 @@ class ComoyoLogin():
         activate_command = {"com.telenor.sw.adaptee.th.ClientActiveCommand" : self.CLIENT_INFO }
         response_key = "com.telenor.sw.footee.common.th.ClientActiveResponse"
         response = self._transport.send_command(activate_command, response_key)
+        if not response["clientAccepted"]: raise Exception("Error activating")
 
     def authenticate(self, sessionKey, userId, clientId):
         auth_info = { "sessionKey" : sessionKey, "userId" : userId, "clientId" : clientId, "commandVersion" : 0 }
@@ -147,6 +161,7 @@ class ComoyoLogin():
         response = self._transport.send_command(login_command, response_key)
         if not response["loggedIn"]: raise Exception("Login error, perhaps +47 ?")
         return response
+
 
 
 class ComoyoSMS():
