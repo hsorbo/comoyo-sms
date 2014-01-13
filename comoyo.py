@@ -73,6 +73,7 @@ class ComoyoTransport(ComoyoWire):
         self.entity_subscribers = []
         self.connect_subscribers = []
         self.disconnect_subscribers = []
+        self.last_write = 0
     
     def _init_heartbeat(self):
         if self._send_heartbeat and self.connected:
@@ -81,14 +82,10 @@ class ComoyoTransport(ComoyoWire):
             t.start()
 
     def _heartbeat(self):
-        #...   threading.Timer(10, foo).start() http://stackoverflow.com/questions/8600161/executing-periodic-actions-in-python
-        #print "starting heartbeat"
-        #http://stackoverflow.com/questions/2906510/correct-way-to-do-timer-function-in-python
         while True:
-            time.sleep(50)
-            if not self.connected:
-                break
-            self.write_entity(None)
+            time.sleep(1)
+            if not self.connected: break
+            if time.time() - self.last_write > 50: self.write_entity(None)
 
     def handle_connect(self): 
         self._init_heartbeat()
@@ -118,6 +115,10 @@ class ComoyoTransport(ComoyoWire):
         self.entity_subscribers.remove(f)
         response = r["response"]
         return response
+
+    def write_entity(self, data = None):
+        self.last_write = time.time()
+        ComoyoWire.write_entity(self, data)
 
     #TODO: def queue_command(self, command, response_format, response_callback, timeout = 10)
 
