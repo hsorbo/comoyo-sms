@@ -121,6 +121,9 @@ class ComoyoTransport(ComoyoWire):
 
     #TODO: def queue_command(self, command, response_format, response_callback, timeout = 10)
 
+class LoginException(Exception): 
+    pass
+
 class ComoyoLogin():
     CLIENT_INFO =  { "clientInformation" : { 
         "imsi" : "Sms Windows Client",
@@ -138,7 +141,7 @@ class ComoyoLogin():
         activate_command = {"com.telenor.sw.adaptee.th.ClientActiveCommand" : self.CLIENT_INFO }
         response_key = "com.telenor.sw.footee.common.th.ClientActiveResponse"
         response = self._transport.send_command(activate_command, response_key)
-        if not response["clientAccepted"]: raise Exception("Error activating")
+        if not response["clientAccepted"]: raise LoginException("Error activating")
 
     def authenticate(self, sessionKey, userId, clientId):
         auth_info = { "sessionKey" : sessionKey, "userId" : userId, "clientId" : clientId, "commandVersion" : 0 }
@@ -147,6 +150,7 @@ class ComoyoLogin():
                 "authenticateSessionInformation" : auth_info }}
         response_key = "com.telenor.sw.footee.common.th.AuthenticateSessionResponse"
         response = self._transport.send_command(auth_command, response_key)
+        if not response["authenticated"]: raise LoginException("Error activating")
 
     def register(self):
         register_command = {"com.telenor.sw.adaptee.th.ClientRegistrationCommand" : self.CLIENT_INFO}
@@ -159,7 +163,7 @@ class ComoyoLogin():
         login_command = {"com.telenor.sw.adaptee.th.AccountLoginCommand" : {"accountLoginInformation": login_info }}
         response_key = "com.telenor.sw.footee.common.th.AccountLoginResponse"
         response = self._transport.send_command(login_command, response_key)
-        if not response["loggedIn"]: raise Exception("Login error, perhaps +47 ?")
+        if not response["loggedIn"]: raise LoginException("Login error, perhaps +47 ?")
         return response
 
 
