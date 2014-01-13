@@ -76,10 +76,11 @@ class ComoyoTransport(ComoyoWire):
         self.last_write = 0
     
     def _init_heartbeat(self):
-        if self._send_heartbeat and self.connected:
-            t = threading.Thread(target=self._heartbeat)
-            t.daemon = True
-            t.start()
+        if not self._send_heartbeat: return
+        if not self.connected: return
+        t = threading.Thread(target=self._heartbeat)
+        t.daemon = True
+        t.start()
 
     def _heartbeat(self):
         while True:
