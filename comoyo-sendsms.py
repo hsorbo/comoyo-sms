@@ -34,7 +34,7 @@ def monitor(transport, sms):
         for conversation in conversations:
             message = conversation["latestMessage"]
             if not message["viewed"] and message.has_key("messageSender"):
-                print message["messageSender"] 
+                print message["messageSender"]
                 print message["body"]["richTextElements"][0]["richTextString"]["text"]
     sms.register_delta_conversations_handler(conv_update)
 
@@ -61,7 +61,7 @@ if __name__ == "__main__":
     sms =  ComoyoSMS(transport)
     transport.connect()
     login.activate()
-        
+
     arg_dict = vars(args)
     if arg_dict.has_key("send"):
         settings = load_settings()
@@ -70,7 +70,9 @@ if __name__ == "__main__":
 
     elif arg_dict.has_key("login"):
         (username, password) = (arg_dict["login"][0], arg_dict["login"][1])
-        settings = login.login(username, password, login.register())
+        register = login.register()
+        settings = login.login(username, password, register)
+        settings["clientId"] = register
         save_settings(settings)
 
     elif args.monitor:

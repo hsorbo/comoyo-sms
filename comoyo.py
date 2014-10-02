@@ -10,7 +10,7 @@ class ComoyoWire():
     DELIM = "\x00"
     log = logging.getLogger("ComoyoWire")
     connected = False
-    
+
     def connect(self):
         #TODO: Check if already connected ++
         self.log.debug("Connecting")
@@ -21,7 +21,7 @@ class ComoyoWire():
         self.rxThread = threading.Thread(target=self._eventLoop,)
         self.rxThread.daemon = True
         self.rxThread.start()
-      
+
     def disconnect(self):
         self.log.debug("Disconnecting")
         if not self.connected: return
@@ -37,7 +37,7 @@ class ComoyoWire():
             try: data = self._sslSocket.read(4096)
             except: failed = True
             if failed or not data:
-                if self.connected: 
+                if self.connected:
                     self.log.debug("Abort")
                     self.connected = False
                     self._socket.close()
@@ -68,38 +68,37 @@ class ComoyoWire():
             raise
 
 class ComoyoTransport(ComoyoWire):
-    def __init__(self, send_heartbeat = True): 
+    def __init__(self, send_heartbeat = True):
         self._send_heartbeat = send_heartbeat
         self.entity_subscribers = []
         self.connect_subscribers = []
         self.disconnect_subscribers = []
         self.last_write = 0
-    
+
     def _init_heartbeat(self):
         if not self._send_heartbeat: return
         if not self.connected: return
-        t = threading.Thread(target=self._heartbeat)
+        def hb():
+            while True:
+                time.sleep(1)
+                if not self.connected: break
+                if time.time() - self.last_write > 50: self.write_entity(None)
+        t = threading.Thread(target=hb)
         t.daemon = True
         t.start()
 
-    def _heartbeat(self):
-        while True:
-            time.sleep(1)
-            if not self.connected: break
-            if time.time() - self.last_write > 50: self.write_entity(None)
-
-    def handle_connect(self): 
+    def handle_connect(self):
         self._init_heartbeat()
         for s in self.connect_subscribers: s()
 
-    def handle_abort(self): 
+    def handle_abort(self):
         for s in self.disconnect_subscribers: s()
 
-    def handle_entity(self, data): 
+    def handle_entity(self, data):
         for s in self.entity_subscribers: s(json.loads(data))
 
     #TODO: take a lambda on "response-format" for special purpose mappers, aka selector
-    def send_command(self, command, response_format = None): 
+    def send_command(self, command, response_format = None):
         evt = threading.Event()
         r = {}
         def f(response):
@@ -109,7 +108,7 @@ class ComoyoTransport(ComoyoWire):
             elif response.has_key(response_format):
                 r["response"] = response[response_format]
                 evt.set()
-            
+
         self.entity_subscribers.append(f)
         self.write_entity(json.dumps(command))
         evt.wait(10)
@@ -123,11 +122,11 @@ class ComoyoTransport(ComoyoWire):
 
     #TODO: def queue_command(self, command, response_format, response_callback, timeout = 10)
 
-class LoginException(Exception): 
+class LoginException(Exception):
     pass
 
 class ComoyoLogin():
-    CLIENT_INFO =  { "clientInformation" : { 
+    CLIENT_INFO =  { "clientInformation" : {
         "imsi" : "Sms Windows Client",
         "imei" : "000000000000000000",
         "clientLocaleTag" : "en-US",
@@ -139,7 +138,7 @@ class ComoyoLogin():
     def __init__(self, transport):
         self._transport = transport
 
-    def activate(self): 
+    def activate(self):
         activate_command = {"com.telenor.sw.adaptee.th.ClientActiveCommand" : self.CLIENT_INFO }
         response_key = "com.telenor.sw.footee.common.th.ClientActiveResponse"
         response = self._transport.send_command(activate_command, response_key)
@@ -148,7 +147,7 @@ class ComoyoLogin():
     def authenticate(self, sessionKey, userId, clientId):
         auth_info = { "sessionKey" : sessionKey, "userId" : userId, "clientId" : clientId, "commandVersion" : 0 }
         auth_command = {
-            "com.telenor.sw.adaptee.th.AuthenticateSessionCommand" : { 
+            "com.telenor.sw.adaptee.th.AuthenticateSessionCommand" : {
                 "authenticateSessionInformation" : auth_info }}
         response_key = "com.telenor.sw.footee.common.th.AuthenticateSessionResponse"
         response = self._transport.send_command(auth_command, response_key)
@@ -171,10 +170,10 @@ class ComoyoLogin():
 
 
 class ComoyoSMS():
-    def __init__(self, transport):
+    def __init__(self, transport, conversation_generation = 0):
         self._transport= transport
         transport.entity_subscribers.append(self._on_event)
-        self._conversation_latest = 0
+        self.conversation_generation = conversation_generation
         self._conversation_handlers = []
         self._delta_conversation_handlers = []
         self._conversations = []
@@ -199,7 +198,7 @@ class ComoyoSMS():
         }
         response = self._transport.send_command(command, "com.telenor.sw.adaptee.th.ConversationUpdateResponse")
         return response["conversations"]
-    
+
     def enable_smsplus(self):
         """Dunno
         """
@@ -215,14 +214,16 @@ class ComoyoSMS():
                 }
             }
         }
-        self._transport.send_command(command)   
-    
+        self._transport.send_command(command)
+
 
     def _on_event(self, event):
         if(event is not None and event.has_key("com.telenor.sw.adaptee.th.ConversationHgn")):
             gen = event["com.telenor.sw.adaptee.th.ConversationHgn"]["generation"]
-            thread.start_new_thread(self._update_conversations, (self._conversation_latest, gen) )
-            self._conversation_latest = gen
+            if gen == self.conversation_generation: return
+            thread.start_new_thread(self._update_conversations, (self.conversation_generation, gen) )
+            self.conversation_generation = gen
+
 
     def _update_conversations(self, minimum, maximum):
         new_conversations = self.get_conversations(minimum, maximum)
